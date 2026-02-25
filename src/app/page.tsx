@@ -6,10 +6,10 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, MessageCircle, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Plus, Send, Sparkles, Trash2, Search, X, Eye, EyeOff, Bot, User2, Heart, Users, Zap, Crown, Star } from 'lucide-react'
 
 interface Character {
   id: string
@@ -19,6 +19,10 @@ interface Character {
   personality: string
   greeting: string
   category: string
+  systemPrompt?: string
+  creator?: string
+  chats?: number
+  likes?: number
 }
 
 interface Message {
@@ -31,33 +35,36 @@ interface Message {
 export default function Home() {
   const [characters, setCharacters] = useState<Character[]>([])
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null)
+  const [viewingCharacter, setViewingCharacter] = useState<Character | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
   const [newCharacter, setNewCharacter] = useState({
     name: '',
     description: '',
-    avatar: '👤',
+    avatar: '🎭',
     personality: '',
     greeting: '',
-    category: 'Outros'
+    category: 'Original',
+    systemPrompt: ''
   })
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Carregar personagens
   useEffect(() => {
     fetchCharacters()
   }, [])
 
-  // Scroll para baixo quando novas mensagens chegarem
+  // Scroll para baixo
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Carregar histórico do localStorage quando selecionar personagem
+  // Carregar histórico do localStorage
   useEffect(() => {
     if (selectedCharacter) {
       const saved = localStorage.getItem(`chat_${selectedCharacter.id}`)
@@ -68,11 +75,8 @@ export default function Home() {
             setMessages(parsed)
             return
           }
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
-      // Mensagem de boas-vindas
       setMessages([{
         id: 'greeting',
         content: selectedCharacter.greeting,
@@ -82,7 +86,7 @@ export default function Home() {
     }
   }, [selectedCharacter])
 
-  // Salvar mensagens no localStorage
+  // Salvar mensagens
   useEffect(() => {
     if (selectedCharacter && messages.length > 0) {
       localStorage.setItem(`chat_${selectedCharacter.id}`, JSON.stringify(messages))
@@ -99,11 +103,6 @@ export default function Home() {
     }
   }
 
-  const selectCharacter = (character: Character) => {
-    setSelectedCharacter(character)
-    setInputMessage('')
-  }
-
   const sendMessage = async () => {
     if (!inputMessage.trim() || !selectedCharacter || isLoading) return
 
@@ -111,7 +110,6 @@ export default function Home() {
     setInputMessage('')
     setIsLoading(true)
 
-    // Adicionar mensagem do usuário imediatamente
     const tempUserMsg: Message = {
       id: 'temp-' + Date.now(),
       content: userMessage,
@@ -134,23 +132,21 @@ export default function Home() {
       const data = await response.json()
 
       if (data.response) {
-        const assistantMessage: Message = {
+        setMessages(prev => [...prev, {
           id: 'msg-' + Date.now(),
           content: data.response,
           role: 'assistant',
           createdAt: new Date().toISOString()
-        }
-        setMessages(prev => [...prev, assistantMessage])
+        }])
       }
     } catch (error) {
-      console.error('Error sending message:', error)
-      const errorMessage: Message = {
+      console.error('Error:', error)
+      setMessages(prev => [...prev, {
         id: 'error-' + Date.now(),
         content: 'Desculpe, houve um erro. Tente novamente.',
         role: 'assistant',
         createdAt: new Date().toISOString()
-      }
-      setMessages(prev => [...prev, errorMessage])
+      }])
     } finally {
       setIsLoading(false)
     }
@@ -172,10 +168,11 @@ export default function Home() {
         setNewCharacter({
           name: '',
           description: '',
-          avatar: '👤',
+          avatar: '🎭',
           personality: '',
           greeting: '',
-          category: 'Outros'
+          category: 'Original',
+          systemPrompt: ''
         })
       }
     } catch (error) {
@@ -195,92 +192,114 @@ export default function Home() {
     }])
   }
 
-  const categories = [...new Set(characters.map(c => c.category))]
+  const categories = ['all', ...new Set(characters.map(c => c.category))]
+
+  const filteredCharacters = characters.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         c.description.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesCategory = selectedCategory === 'all' || c.category === selectedCategory
+    return matchesSearch && matchesCategory
+  })
 
   // Tela de Chat
   if (selectedCharacter) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col">
-        {/* Header do Chat */}
-        <div className="border-b border-white/10 bg-black/20 backdrop-blur-xl p-4">
-          <div className="max-w-4xl mx-auto flex items-center gap-4">
+      <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+        {/* Header */}
+        <div className="border-b border-[#1f1f1f] bg-[#0f0f0f] sticky top-0 z-50">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setSelectedCharacter(null)}
-              className="text-white hover:bg-white/10"
+              className="text-gray-400 hover:text-white hover:bg-[#1a1a1a]"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <div className="flex items-center gap-3 flex-1">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-2xl">
-                {selectedCharacter.avatar}
-              </div>
-              <div>
-                <h2 className="font-bold text-white text-lg">{selectedCharacter.name}</h2>
-                <p className="text-sm text-white/60">{selectedCharacter.category}</p>
-              </div>
+
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-xl">
+              {selectedCharacter.avatar}
             </div>
+
+            <div className="flex-1 min-w-0">
+              <h2 className="font-semibold text-white truncate">{selectedCharacter.name}</h2>
+              <p className="text-xs text-gray-500 truncate">{selectedCharacter.category}</p>
+            </div>
+
             <Button
               variant="ghost"
               size="icon"
               onClick={clearHistory}
-              className="text-white hover:bg-white/10"
+              className="text-gray-400 hover:text-red-400 hover:bg-[#1a1a1a]"
             >
-              <Trash2 className="w-5 h-5" />
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         </div>
 
-        {/* Área de Mensagens */}
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-          <div className="max-w-4xl mx-auto space-y-4">
+        {/* Mensagens */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                <div className={`flex gap-3 max-w-[85%] ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
+                    message.role === 'user'
+                      ? 'bg-purple-600/20 text-purple-400'
+                      : 'bg-[#1a1a1a] text-gray-400'
+                  }`}>
+                    {message.role === 'user' ? <User2 className="w-4 h-4" /> : selectedCharacter.avatar}
+                  </div>
+                  <div className={`rounded-2xl px-4 py-3 ${
                     message.role === 'user'
                       ? 'bg-purple-600 text-white'
-                      : 'bg-white/10 text-white backdrop-blur'
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                      : 'bg-[#1a1a1a] text-gray-200 border border-[#2a2a2a]'
+                  }`}>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                  </div>
                 </div>
               </div>
             ))}
+
             {isLoading && (
               <div className="flex justify-start">
-                <div className="bg-white/10 backdrop-blur rounded-2xl px-4 py-3">
-                  <div className="flex items-center gap-2 text-white/60">
-                    <Sparkles className="w-4 h-4 animate-pulse" />
-                    <span>Pensando...</span>
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center text-sm">
+                    {selectedCharacter.avatar}
+                  </div>
+                  <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl px-4 py-3">
+                    <div className="flex items-center gap-2 text-gray-500">
+                      <Sparkles className="w-4 h-4 animate-pulse" />
+                      <span className="text-sm">Pensando...</span>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
+            <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
 
-        {/* Input de Mensagem */}
-        <div className="border-t border-white/10 bg-black/20 backdrop-blur-xl p-4">
-          <div className="max-w-4xl mx-auto flex gap-2">
+        {/* Input */}
+        <div className="border-t border-[#1f1f1f] bg-[#0f0f0f] sticky bottom-0">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex gap-2">
             <Input
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
               placeholder="Digite sua mensagem..."
-              className="bg-white/10 border-white/20 text-white placeholder:text-white/40 focus-visible:ring-purple-500"
+              className="flex-1 bg-[#1a1a1a] border-[#2a2a2a] text-white placeholder:text-gray-600 focus:border-purple-600 focus:ring-purple-600/20"
               disabled={isLoading}
             />
             <Button
               onClick={sendMessage}
               disabled={isLoading || !inputMessage.trim()}
-              className="bg-purple-600 hover:bg-purple-700"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4"
             >
-              <Send className="w-5 h-5" />
+              <Send className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -288,190 +307,347 @@ export default function Home() {
     )
   }
 
-  // Tela Principal - Lista de Personagens
+  // Tela Principal
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div className="min-h-screen bg-[#0a0a0a]">
       {/* Header */}
-      <div className="border-b border-white/10 bg-black/20 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-[#1f1f1f]">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between gap-4">
+            {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                <MessageCircle className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                <Bot className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Z-Chat</h1>
-                <p className="text-sm text-white/60">Sua plataforma de personagens AI</p>
+                <h1 className="text-xl font-bold text-white">Z-Chat</h1>
+                <p className="text-xs text-gray-500">Personagens AI</p>
               </div>
             </div>
+
+            {/* Search */}
+            <div className="flex-1 max-w-md relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar personagens..."
+                className="w-full bg-[#141414] border-[#2a2a2a] text-white placeholder:text-gray-600 pl-10 focus:border-purple-600"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Create Button */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-purple-600 hover:bg-purple-700 gap-2">
+                <Button className="bg-purple-600 hover:bg-purple-700 text-white gap-2">
                   <Plus className="w-4 h-4" />
-                  Criar Personagem
+                  <span className="hidden sm:inline">Criar</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-slate-900 border-white/20 text-white max-w-md">
+              <DialogContent className="bg-[#141414] border-[#2a2a2a] text-white max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Criar Novo Personagem</DialogTitle>
-                  <DialogDescription className="text-white/60">
-                    Crie seu próprio personagem com personalidade única
+                  <DialogTitle className="text-xl">Criar Personagem</DialogTitle>
+                  <DialogDescription className="text-gray-500">
+                    Dê vida ao seu personagem único
                   </DialogDescription>
                 </DialogHeader>
+
                 <div className="space-y-4 mt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-white/80">Nome</Label>
-                      <Input
-                        value={newCharacter.name}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
-                        className="bg-white/10 border-white/20 text-white mt-1"
-                        placeholder="Nome do personagem"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-white/80">Avatar (Emoji)</Label>
+                  {/* Avatar e Nome */}
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-600/20 to-pink-600/20 border border-[#2a2a2a] flex items-center justify-center text-3xl">
+                        {newCharacter.avatar}
+                      </div>
                       <Input
                         value={newCharacter.avatar}
                         onChange={(e) => setNewCharacter({ ...newCharacter, avatar: e.target.value })}
-                        className="bg-white/10 border-white/20 text-white mt-1"
-                        placeholder="🧙‍♀️"
+                        className="w-16 text-center bg-[#1a1a1a] border-[#2a2a2a] text-white"
+                        placeholder="🎭"
                       />
                     </div>
+                    <div className="flex-1 space-y-3">
+                      <div>
+                        <Label className="text-gray-400 text-xs">Nome *</Label>
+                        <Input
+                          value={newCharacter.name}
+                          onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
+                          className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1"
+                          placeholder="Nome do personagem"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-gray-400 text-xs">Categoria</Label>
+                        <Input
+                          value={newCharacter.category}
+                          onChange={(e) => setNewCharacter({ ...newCharacter, category: e.target.value })}
+                          className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1"
+                          placeholder="Ex: Anime, Fantasia, Sci-Fi"
+                        />
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Descrição */}
                   <div>
-                    <Label className="text-white/80">Descrição</Label>
-                    <Input
+                    <Label className="text-gray-400 text-xs">Descrição</Label>
+                    <Textarea
                       value={newCharacter.description}
                       onChange={(e) => setNewCharacter({ ...newCharacter, description: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white mt-1"
-                      placeholder="Descrição do personagem"
+                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
+                      placeholder="Quem é esse personagem?"
                     />
                   </div>
+
+                  {/* Personalidade */}
                   <div>
-                    <Label className="text-white/80">Personalidade</Label>
+                    <Label className="text-gray-400 text-xs">Personalidade *</Label>
                     <Textarea
                       value={newCharacter.personality}
                       onChange={(e) => setNewCharacter({ ...newCharacter, personality: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white mt-1"
-                      placeholder="Ex: Gentil, misterioso, brincalhão..."
-                      rows={2}
+                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
+                      placeholder="Como o personagem age? Ex: gentil, misterioso, brincalhão..."
                     />
                   </div>
+
+                  {/* Prompt do Sistema */}
                   <div>
-                    <Label className="text-white/80">Mensagem de Boas-vindas</Label>
+                    <Label className="text-gray-400 text-xs">Prompt Personalizado (Avançado)</Label>
+                    <Textarea
+                      value={newCharacter.systemPrompt}
+                      onChange={(e) => setNewCharacter({ ...newCharacter, systemPrompt: e.target.value })}
+                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 font-mono text-sm min-h-[80px]"
+                      placeholder="Instruções especiais para a IA..."
+                    />
+                    <p className="text-xs text-gray-600 mt-1">Define como a IA deve se comportar</p>
+                  </div>
+
+                  {/* Mensagem de Boas-vindas */}
+                  <div>
+                    <Label className="text-gray-400 text-xs">Mensagem de Boas-vindas *</Label>
                     <Textarea
                       value={newCharacter.greeting}
                       onChange={(e) => setNewCharacter({ ...newCharacter, greeting: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white mt-1"
-                      placeholder="Como o personagem cumprimenta?"
-                      rows={3}
+                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
+                      placeholder="Primeira mensagem do personagem..."
                     />
                   </div>
-                  <div>
-                    <Label className="text-white/80">Categoria</Label>
-                    <Input
-                      value={newCharacter.category}
-                      onChange={(e) => setNewCharacter({ ...newCharacter, category: e.target.value })}
-                      className="bg-white/10 border-white/20 text-white mt-1"
-                      placeholder="Ex: Fantasia, Sci-Fi, Anime..."
-                    />
-                  </div>
+
                   <Button
                     onClick={createCharacter}
-                    className="w-full bg-purple-600 hover:bg-purple-700"
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                     disabled={!newCharacter.name || !newCharacter.personality || !newCharacter.greeting}
                   >
+                    <Sparkles className="w-4 h-4 mr-2" />
                     Criar Personagem
                   </Button>
                 </div>
               </DialogContent>
             </Dialog>
           </div>
-        </div>
-      </div>
 
-      {/* Conteúdo Principal */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Banner */}
-        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-purple-600/20 to-pink-600/20 border border-white/10">
-          <h2 className="text-3xl font-bold text-white mb-2">
-            Bem-vindo ao Z-Chat! 🎉
-          </h2>
-          <p className="text-white/70">
-            Escolha um personagem e comece a conversar. Mensagens ilimitadas, sem restrições, 100% gratuito!
-          </p>
-          <div className="flex flex-wrap gap-4 mt-4">
-            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-              ✓ Mensagens Ilimitadas
-            </Badge>
-            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
-              ✓ 100% Gratuito
-            </Badge>
-            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30">
-              ✓ Sem Restrições
-            </Badge>
+          {/* Categorias */}
+          <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+            {categories.map((cat) => (
+              <Button
+                key={cat}
+                variant={selectedCategory === cat ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setSelectedCategory(cat)}
+                className={`rounded-full whitespace-nowrap ${
+                  selectedCategory === cat
+                    ? 'bg-purple-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-[#1a1a1a]'
+                }`}
+              >
+                {cat === 'all' ? 'Todos' : cat}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {/* Conteúdo */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* Stats Banner */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-purple-400">{characters.length}</div>
+            <div className="text-xs text-gray-500">Personagens</div>
+          </div>
+          <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-green-400">∞</div>
+            <div className="text-xs text-gray-500">Mensagens</div>
+          </div>
+          <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4 text-center">
+            <div className="text-2xl font-bold text-blue-400">100%</div>
+            <div className="text-xs text-gray-500">Gratuito</div>
           </div>
         </div>
 
-        {/* Lista por Categorias */}
-        {categories.length > 0 ? (
-          categories.map((category) => (
-            <div key={category} className="mb-8">
-              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-purple-400" />
-                {category}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {characters
-                  .filter((c) => c.category === category)
-                  .map((character) => (
-                    <Card
-                      key={character.id}
-                      className="bg-white/5 border-white/10 hover:bg-white/10 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/20"
-                      onClick={() => selectCharacter(character)}
-                    >
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center gap-3">
-                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">
-                            {character.avatar}
-                          </div>
-                          <div>
-                            <CardTitle className="text-white">{character.name}</CardTitle>
-                            <Badge variant="outline" className="border-white/20 text-white/60 mt-1">
-                              {character.category}
-                            </Badge>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription className="text-white/60 line-clamp-2">
-                          {character.description}
-                        </CardDescription>
-                        <div className="mt-3 flex items-center gap-2 text-purple-400 text-sm">
-                          <MessageCircle className="w-4 h-4" />
-                          <span>Clicar para conversar</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+        {/* Grid de Personagens */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredCharacters.map((character) => (
+            <Card
+              key={character.id}
+              className="bg-[#141414] border-[#1f1f1f] hover:border-purple-600/50 transition-all duration-300 group cursor-pointer overflow-hidden"
+            >
+              {/* Banner com Avatar */}
+              <div className="h-24 bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-blue-600/20 relative">
+                <div className="absolute -bottom-6 left-4">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-2xl shadow-lg border-2 border-[#0a0a0a]">
+                    {character.avatar}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))
-        ) : (
+
+              <CardHeader className="pt-8 pb-2">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-white text-lg truncate">{character.name}</CardTitle>
+                    <Badge variant="outline" className="border-[#2a2a2a] text-gray-500 text-xs mt-1">
+                      {character.category}
+                    </Badge>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pb-4">
+                <CardDescription className="text-gray-500 text-sm line-clamp-2 mb-3">
+                  {character.description || character.personality}
+                </CardDescription>
+
+                {/* Stats */}
+                <div className="flex items-center gap-4 text-xs text-gray-600 mb-3">
+                  <div className="flex items-center gap-1">
+                    <MessageCircle className="w-3 h-3" />
+                    <span>{character.chats || Math.floor(Math.random() * 1000)}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Heart className="w-3 h-3" />
+                    <span>{character.likes || Math.floor(Math.random() * 500)}</span>
+                  </div>
+                </div>
+
+                {/* Botões */}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => setSelectedCharacter(character)}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-1" />
+                    Conversar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setViewingCharacter(character)}
+                    className="border-[#2a2a2a] text-gray-400 hover:text-white hover:bg-[#1a1a1a]"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {filteredCharacters.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-white/60">Carregando personagens...</p>
+            <Bot className="w-16 h-16 text-gray-700 mx-auto mb-4" />
+            <p className="text-gray-500">Nenhum personagem encontrado</p>
           </div>
         )}
-      </div>
+      </main>
+
+      {/* Modal de Visualização */}
+      <Dialog open={!!viewingCharacter} onOpenChange={() => setViewingCharacter(null)}>
+        <DialogContent className="bg-[#141414] border-[#2a2a2a] text-white max-w-lg">
+          {viewingCharacter && (
+            <>
+              <div className="h-32 -mx-6 -mt-6 bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-blue-600/20 relative mb-4">
+                <div className="absolute -bottom-8 left-6">
+                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-3xl shadow-lg border-2 border-[#141414]">
+                    {viewingCharacter.avatar}
+                  </div>
+                </div>
+              </div>
+
+              <DialogHeader className="pt-4">
+                <DialogTitle className="text-xl">{viewingCharacter.name}</DialogTitle>
+                <Badge variant="outline" className="border-[#2a2a2a] text-gray-400 w-fit mt-1">
+                  {viewingCharacter.category}
+                </Badge>
+              </DialogHeader>
+
+              <div className="space-y-4 mt-4">
+                <div>
+                  <h4 className="text-xs text-gray-500 uppercase mb-1">Descrição</h4>
+                  <p className="text-gray-300 text-sm">{viewingCharacter.description || 'Sem descrição'}</p>
+                </div>
+
+                <div>
+                  <h4 className="text-xs text-gray-500 uppercase mb-1">Personalidade</h4>
+                  <p className="text-gray-300 text-sm">{viewingCharacter.personality}</p>
+                </div>
+
+                <div>
+                  <h4 className="text-xs text-gray-500 uppercase mb-1">Introdução</h4>
+                  <div className="bg-[#1a1a1a] rounded-lg p-3 text-gray-300 text-sm border border-[#2a2a2a]">
+                    {viewingCharacter.greeting}
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    onClick={() => {
+                      setSelectedCharacter(viewingCharacter)
+                      setViewingCharacter(null)
+                    }}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Conversar
+                  </Button>
+                  <DialogClose asChild>
+                    <Button variant="outline" className="border-[#2a2a2a] text-gray-400 hover:text-white">
+                      Fechar
+                    </Button>
+                  </DialogClose>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Footer */}
-      <div className="border-t border-white/10 bg-black/20 py-6 mt-8">
-        <div className="max-w-7xl mx-auto px-4 text-center text-white/40 text-sm">
-          <p>Z-Chat © 2024 - Sua plataforma de personagens AI</p>
-          <p className="mt-1">Mensagens ilimitadas • Sem restrições • 100% Gratuito</p>
+      <footer className="border-t border-[#1f1f1f] bg-[#0f0f0f] py-6 mt-8">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+              <Bot className="w-3 h-3 text-white" />
+            </div>
+            <span className="font-semibold text-white">Z-Chat</span>
+          </div>
+          <p className="text-gray-600 text-sm">Mensagens ilimitadas • Sem restrições • 100% Gratuito</p>
+          <div className="flex justify-center gap-4 mt-3 text-xs text-gray-700">
+            <span>#AI</span>
+            <span>#ChatBot</span>
+            <span>#Roleplay</span>
+            <span>#Personagens</span>
+            <span>#Gratuito</span>
+          </div>
         </div>
-      </div>
+      </footer>
     </div>
   )
 }
