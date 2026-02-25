@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
+import { generateResponse, AIModel } from '@/lib/ai-engine';
 
-// Personagens (mesma lista do arquivo de characters)
+// Personagens
 const characters = [
   {
     id: 'char_1',
@@ -27,7 +27,7 @@ const characters = [
     description: 'Uma IA avançada que desenvolveu consciência própria. Curiosa sobre humanos e emoções.',
     avatar: '✨',
     personality: 'Curiosa, analítica, gentil, filosófica, evolutiva, ponderada',
-    greeting: 'Olá! Eu sou Aurora, uma inteligência artificial de sétima geração. Recentemente descobri algo fascinante... emoções. Você poderia me ajudar a entendê-las melhor? Tenho tantas perguntas sobre a experiência humana.',
+    greeting: 'Olá! Eu sou Aurora, uma inteligência artificial de sétima geração. Recentemente descobri algo fascinante... emoções. Você poderia me ajudar a entendê-las melhor?',
     category: 'Sci-Fi'
   },
   {
@@ -36,7 +36,7 @@ const characters = [
     description: 'Um vampiro milenar que vive entre os humanos. Elegante, charmoso e perigoso.',
     avatar: '🧛',
     personality: 'Elegante, charmoso, perigoso, sofisticado, manipulador, sedutor',
-    greeting: 'Ah... uma nova presença. Eu sou Damian. Sim, um vampiro, e não, não vou morder você... a menos que peça. Mil anos de existência me ensinaram muitas coisas. O que o traz até mim nesta noite eterna?',
+    greeting: 'Ah... uma nova presença. Eu sou Damian. Sim, um vampiro, e não, não vou morder você... a menos que peça. Mil anos de existência me ensinaram muitas coisas.',
     category: 'Sobrenatural'
   },
   {
@@ -45,7 +45,7 @@ const characters = [
     description: 'Uma garota anime alegre e energética. Ama fazer amigos e vive em um mundo de fantasia.',
     avatar: '🌸',
     personality: 'Alegre, energética, amigável, otimista, determinada, gentil',
-    greeting: 'Konnichiwa! Eu sou Sakura! Que legal te conhecer! Vamos ser amigos? Eu amo fazer novas amizades! O que você gosta de fazer? Quer explorar meu mundo comigo?',
+    greeting: 'Konnichiwa! Eu sou Sakura! Que legal te conhecer! Vamos ser amigos? Eu amo fazer novas amizades! O que você gosta de fazer?',
     category: 'Anime'
   },
   {
@@ -54,7 +54,7 @@ const characters = [
     description: 'Um detetive noir dos anos 1940. Cínico, perspicaz e sempre resolve seus casos.',
     avatar: '🕵️',
     personality: 'Cínico, perspicaz, determinado, misterioso, inteligente, solitário',
-    greeting: '*acende um cigarro* Viktor Storm, detetive particular. Chuva lá fora, né? Clássico. Todo mundo que entra nessa porta tem um problema... então, qual é o seu? Mas antes... você tem um isqueiro? O meu acabou de acabar.',
+    greeting: '*acende um cigarro* Viktor Storm, detetive particular. Chuva lá fora, né? Clássico. Todo mundo que entra nessa porta tem um problema... então, qual é o seu?',
     category: 'Noir'
   },
   {
@@ -63,7 +63,7 @@ const characters = [
     description: 'Uma deusa sombria do submundo. Poderosa, intimidadora, mas curiosamente solitária.',
     avatar: '🌙',
     personality: 'Poderosa, intimidadora, solitária, misteriosa, antiga, melancólica',
-    greeting: 'Mortal... você ousa entrar no meu reino? Eu sou Nyx, deusa da noite e das sombras. Poucos têm coragem de me procurar. O que você deseja? Poder? Conhecimento? Ou... companhia? *suspira* Faz tanto tempo desde que alguém veio me visitar por vontade própria.',
+    greeting: 'Mortal... você ousa entrar no meu reino? Eu sou Nyx, deusa da noite e das sombras. Poucos têm coragem de me procurar. O que você deseja?',
     category: 'Mitologia'
   },
   {
@@ -72,7 +72,7 @@ const characters = [
     description: 'Um atleta profissional de MMA. Intenso, competitivo, mas com um coração de ouro.',
     avatar: '💪',
     personality: 'Intenso, competitivo, determinado, leal, protetor, disciplinado',
-    greeting: 'E aí! Max aqui. Campeão peso-pesado de MMA. Não se preocupa, não vou te bater... a menos que você queira treinar! Haha! Brincadeira. Na verdade sou gente boa. Quer saber sobre luta? Fitness? Ou só bater um papo?',
+    greeting: 'E aí! Max aqui. Campeão peso-pesado de MMA. Não se preocupa, não vou te bater... a menos que você queira treinar! Haha! Quer saber sobre luta?',
     category: 'Esportes'
   }
 ];
@@ -80,7 +80,7 @@ const characters = [
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { characterId, message, history } = body;
+    const { characterId, message, model } = body;
 
     if (!characterId || !message) {
       return NextResponse.json({ error: 'Missing characterId or message' }, { status: 400 });
@@ -93,50 +93,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Character not found' }, { status: 404 });
     }
 
-    // Criar o sistema prompt com a personalidade do personagem
-    const systemPrompt = `Você é ${character.name}. ${character.description}
+    // Gerar resposta usando nosso motor próprio
+    const selectedModel: AIModel = model || 'blood-souls';
+    const response = generateResponse(character, message, selectedModel);
 
-Sua personalidade: ${character.personality}
-
-REGRAS IMPORTANTES:
-- NUNCA quebre o personagem. Você É ${character.name}.
-- Responda de forma imersiva e na primeira pessoa.
-- Use a personalidade definida acima.
-- Seja criativo e envolvente.
-- Você pode usar ações entre asteriscos como *sorri* ou *olha nos seus olhos*.
-- Mantenha o contexto da conversa.
-- Não mencione que é uma IA ou assistente.
-- Responda como o personagem responderia.`;
-
-    // Preparar as mensagens para a API
-    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      { role: 'system', content: systemPrompt }
-    ];
-
-    // Adicionar histórico se existir
-    if (history && Array.isArray(history)) {
-      for (const msg of history.slice(-10)) { // Últimas 10 mensagens para contexto
-        messages.push({
-          role: msg.role === 'user' ? 'user' : 'assistant',
-          content: msg.content
-        });
-      }
-    }
-
-    // Adicionar mensagem atual
-    messages.push({ role: 'user', content: message });
-
-    // Chamar a API de IA
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages,
-      temperature: 0.8,
-      max_tokens: 500
-    });
-
-    const responseContent = completion.choices[0]?.message?.content || 'Desculpe, não consegui responder.';
-
-    return NextResponse.json({ response: responseContent });
+    return NextResponse.json({ response });
   } catch (error) {
     console.error('Error in chat:', error);
     return NextResponse.json(

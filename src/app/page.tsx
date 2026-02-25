@@ -9,7 +9,27 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, MessageCircle, Plus, Send, Sparkles, Trash2, Search, X, Eye, EyeOff, Bot, User2, Heart, Users, Zap, Crown, Star } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Plus, Send, Search, X, Eye, Bot, User2, Heart, Sparkles, Zap, Crown, Settings } from 'lucide-react'
+
+// Modelos de IA
+type AIModel = 'blood-souls' | 'crystal-mode'
+
+const AI_MODELS = {
+  'blood-souls': {
+    name: 'Blood Souls',
+    description: 'Respostas rápidas (~80 chars)',
+    icon: '🩸',
+    color: 'text-red-400',
+    bgColor: 'bg-red-500/20',
+  },
+  'crystal-mode': {
+    name: 'Crystal Mode',
+    description: 'Respostas longas (~200 chars)',
+    icon: '💎',
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-500/20',
+  },
+}
 
 interface Character {
   id: string
@@ -20,7 +40,6 @@ interface Character {
   greeting: string
   category: string
   systemPrompt?: string
-  creator?: string
   chats?: number
   likes?: number
 }
@@ -42,6 +61,8 @@ export default function Home() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedModel, setSelectedModel] = useState<AIModel>('blood-souls')
+  const [showModelSelector, setShowModelSelector] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const [newCharacter, setNewCharacter] = useState({
@@ -54,27 +75,16 @@ export default function Home() {
     systemPrompt: ''
   })
 
-  // Carregar personagens
-  useEffect(() => {
-    fetchCharacters()
-  }, [])
+  useEffect(() => { fetchCharacters() }, [])
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  // Scroll para baixo
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  // Carregar histórico do localStorage
   useEffect(() => {
     if (selectedCharacter) {
       const saved = localStorage.getItem(`chat_${selectedCharacter.id}`)
       if (saved) {
         try {
           const parsed = JSON.parse(saved)
-          if (parsed.length > 0) {
-            setMessages(parsed)
-            return
-          }
+          if (parsed.length > 0) { setMessages(parsed); return }
         } catch {}
       }
       setMessages([{
@@ -86,7 +96,6 @@ export default function Home() {
     }
   }, [selectedCharacter])
 
-  // Salvar mensagens
   useEffect(() => {
     if (selectedCharacter && messages.length > 0) {
       localStorage.setItem(`chat_${selectedCharacter.id}`, JSON.stringify(messages))
@@ -110,13 +119,12 @@ export default function Home() {
     setInputMessage('')
     setIsLoading(true)
 
-    const tempUserMsg: Message = {
+    setMessages(prev => [...prev, {
       id: 'temp-' + Date.now(),
       content: userMessage,
       role: 'user',
       createdAt: new Date().toISOString()
-    }
-    setMessages(prev => [...prev, tempUserMsg])
+    }])
 
     try {
       const response = await fetch('/api/chat', {
@@ -125,7 +133,7 @@ export default function Home() {
         body: JSON.stringify({
           characterId: selectedCharacter.id,
           message: userMessage,
-          history: messages.filter(m => m.id !== 'greeting')
+          model: selectedModel
         })
       })
 
@@ -165,15 +173,7 @@ export default function Home() {
       if (response.ok) {
         await fetchCharacters()
         setIsCreateOpen(false)
-        setNewCharacter({
-          name: '',
-          description: '',
-          avatar: '🎭',
-          personality: '',
-          greeting: '',
-          category: 'Original',
-          systemPrompt: ''
-        })
+        setNewCharacter({ name: '', description: '', avatar: '🎭', personality: '', greeting: '', category: 'Original', systemPrompt: '' })
       }
     } catch (error) {
       console.error('Error creating character:', error)
@@ -226,13 +226,46 @@ export default function Home() {
               <p className="text-xs text-gray-500 truncate">{selectedCharacter.category}</p>
             </div>
 
+            {/* Model Selector */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowModelSelector(!showModelSelector)}
+                className={`${AI_MODELS[selectedModel].bgColor} ${AI_MODELS[selectedModel].color} border-[#2a2a2a] gap-2`}
+              >
+                <span>{AI_MODELS[selectedModel].icon}</span>
+                <span className="hidden sm:inline text-xs">{AI_MODELS[selectedModel].name}</span>
+              </Button>
+
+              {showModelSelector && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-xl z-50">
+                  {(Object.keys(AI_MODELS) as AIModel[]).map((model) => (
+                    <button
+                      key={model}
+                      onClick={() => { setSelectedModel(model); setShowModelSelector(false) }}
+                      className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-[#252525] first:rounded-t-lg last:rounded-b-lg ${
+                        selectedModel === model ? AI_MODELS[model].color : 'text-gray-400'
+                      }`}
+                    >
+                      <span>{AI_MODELS[model].icon}</span>
+                      <div>
+                        <div className="text-sm font-medium">{AI_MODELS[model].name}</div>
+                        <div className="text-xs text-gray-500">{AI_MODELS[model].description}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <Button
               variant="ghost"
               size="icon"
               onClick={clearHistory}
               className="text-gray-400 hover:text-red-400 hover:bg-[#1a1a1a]"
             >
-              <Trash2 className="w-4 h-4" />
+              <X className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -273,7 +306,7 @@ export default function Home() {
                   <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl px-4 py-3">
                     <div className="flex items-center gap-2 text-gray-500">
                       <Sparkles className="w-4 h-4 animate-pulse" />
-                      <span className="text-sm">Pensando...</span>
+                      <span className="text-sm">{selectedModel === 'blood-souls' ? 'Processando...' : 'Refletindo...'}</span>
                     </div>
                   </div>
                 </div>
@@ -297,7 +330,7 @@ export default function Home() {
             <Button
               onClick={sendMessage}
               disabled={isLoading || !inputMessage.trim()}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4"
+              className={`${selectedModel === 'blood-souls' ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'} text-white px-4`}
             >
               <Send className="w-4 h-4" />
             </Button>
@@ -344,114 +377,151 @@ export default function Home() {
               )}
             </div>
 
-            {/* Create Button */}
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-purple-600 hover:bg-purple-700 text-white gap-2">
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Criar</span>
+            {/* Model Selector + Create Button */}
+            <div className="flex items-center gap-2">
+              {/* Model Selector */}
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowModelSelector(!showModelSelector)}
+                  className={`${AI_MODELS[selectedModel].bgColor} ${AI_MODELS[selectedModel].color} border-[#2a2a2a] gap-2`}
+                >
+                  <span>{AI_MODELS[selectedModel].icon}</span>
+                  <span className="hidden md:inline">{AI_MODELS[selectedModel].name}</span>
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="bg-[#141414] border-[#2a2a2a] text-white max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="text-xl">Criar Personagem</DialogTitle>
-                  <DialogDescription className="text-gray-500">
-                    Dê vida ao seu personagem único
-                  </DialogDescription>
-                </DialogHeader>
 
-                <div className="space-y-4 mt-4">
-                  {/* Avatar e Nome */}
-                  <div className="flex gap-4">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-600/20 to-pink-600/20 border border-[#2a2a2a] flex items-center justify-center text-3xl">
-                        {newCharacter.avatar}
+                {showModelSelector && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg shadow-xl z-50">
+                    <div className="px-3 py-2 border-b border-[#2a2a2a]">
+                      <p className="text-xs text-gray-500">Selecionar Modelo AI</p>
+                    </div>
+                    {(Object.keys(AI_MODELS) as AIModel[]).map((model) => (
+                      <button
+                        key={model}
+                        onClick={() => { setSelectedModel(model); setShowModelSelector(false) }}
+                        className={`w-full px-3 py-3 text-left flex items-center gap-3 hover:bg-[#252525] ${
+                          selectedModel === model ? AI_MODELS[model].color : 'text-gray-400'
+                        }`}
+                      >
+                        <span className="text-lg">{AI_MODELS[model].icon}</span>
+                        <div>
+                          <div className="text-sm font-medium">{AI_MODELS[model].name}</div>
+                          <div className="text-xs text-gray-500">{AI_MODELS[model].description}</div>
+                        </div>
+                        {selectedModel === model && (
+                          <span className="ml-auto text-green-400">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Create Button */}
+              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-purple-600 hover:bg-purple-700 text-white gap-2">
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Criar</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-[#141414] border-[#2a2a2a] text-white max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl">Criar Personagem</DialogTitle>
+                    <DialogDescription className="text-gray-500">
+                      Dê vida ao seu personagem único
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4 mt-4">
+                    <div className="flex gap-4">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-600/20 to-pink-600/20 border border-[#2a2a2a] flex items-center justify-center text-3xl">
+                          {newCharacter.avatar}
+                        </div>
+                        <Input
+                          value={newCharacter.avatar}
+                          onChange={(e) => setNewCharacter({ ...newCharacter, avatar: e.target.value })}
+                          className="w-16 text-center bg-[#1a1a1a] border-[#2a2a2a] text-white"
+                          placeholder="🎭"
+                        />
                       </div>
-                      <Input
-                        value={newCharacter.avatar}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, avatar: e.target.value })}
-                        className="w-16 text-center bg-[#1a1a1a] border-[#2a2a2a] text-white"
-                        placeholder="🎭"
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <Label className="text-gray-400 text-xs">Nome *</Label>
+                          <Input
+                            value={newCharacter.name}
+                            onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1"
+                            placeholder="Nome do personagem"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-gray-400 text-xs">Categoria</Label>
+                          <Input
+                            value={newCharacter.category}
+                            onChange={(e) => setNewCharacter({ ...newCharacter, category: e.target.value })}
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1"
+                            placeholder="Ex: Anime, Fantasia, Sci-Fi"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-gray-400 text-xs">Descrição</Label>
+                      <Textarea
+                        value={newCharacter.description}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, description: e.target.value })}
+                        className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
+                        placeholder="Quem é esse personagem?"
                       />
                     </div>
-                    <div className="flex-1 space-y-3">
-                      <div>
-                        <Label className="text-gray-400 text-xs">Nome *</Label>
-                        <Input
-                          value={newCharacter.name}
-                          onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
-                          className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1"
-                          placeholder="Nome do personagem"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-gray-400 text-xs">Categoria</Label>
-                        <Input
-                          value={newCharacter.category}
-                          onChange={(e) => setNewCharacter({ ...newCharacter, category: e.target.value })}
-                          className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1"
-                          placeholder="Ex: Anime, Fantasia, Sci-Fi"
-                        />
-                      </div>
+
+                    <div>
+                      <Label className="text-gray-400 text-xs">Personalidade *</Label>
+                      <Textarea
+                        value={newCharacter.personality}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, personality: e.target.value })}
+                        className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
+                        placeholder="Como o personagem age? Ex: gentil, misterioso, brincalhão..."
+                      />
                     </div>
-                  </div>
 
-                  {/* Descrição */}
-                  <div>
-                    <Label className="text-gray-400 text-xs">Descrição</Label>
-                    <Textarea
-                      value={newCharacter.description}
-                      onChange={(e) => setNewCharacter({ ...newCharacter, description: e.target.value })}
-                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
-                      placeholder="Quem é esse personagem?"
-                    />
-                  </div>
+                    <div>
+                      <Label className="text-gray-400 text-xs">Prompt Personalizado (Avançado)</Label>
+                      <Textarea
+                        value={newCharacter.systemPrompt}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, systemPrompt: e.target.value })}
+                        className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 font-mono text-sm min-h-[80px]"
+                        placeholder="Instruções especiais para a IA..."
+                      />
+                      <p className="text-xs text-gray-600 mt-1">Define como a IA deve se comportar</p>
+                    </div>
 
-                  {/* Personalidade */}
-                  <div>
-                    <Label className="text-gray-400 text-xs">Personalidade *</Label>
-                    <Textarea
-                      value={newCharacter.personality}
-                      onChange={(e) => setNewCharacter({ ...newCharacter, personality: e.target.value })}
-                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
-                      placeholder="Como o personagem age? Ex: gentil, misterioso, brincalhão..."
-                    />
-                  </div>
+                    <div>
+                      <Label className="text-gray-400 text-xs">Mensagem de Boas-vindas *</Label>
+                      <Textarea
+                        value={newCharacter.greeting}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, greeting: e.target.value })}
+                        className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
+                        placeholder="Primeira mensagem do personagem..."
+                      />
+                    </div>
 
-                  {/* Prompt do Sistema */}
-                  <div>
-                    <Label className="text-gray-400 text-xs">Prompt Personalizado (Avançado)</Label>
-                    <Textarea
-                      value={newCharacter.systemPrompt}
-                      onChange={(e) => setNewCharacter({ ...newCharacter, systemPrompt: e.target.value })}
-                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 font-mono text-sm min-h-[80px]"
-                      placeholder="Instruções especiais para a IA..."
-                    />
-                    <p className="text-xs text-gray-600 mt-1">Define como a IA deve se comportar</p>
+                    <Button
+                      onClick={createCharacter}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      disabled={!newCharacter.name || !newCharacter.personality || !newCharacter.greeting}
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Criar Personagem
+                    </Button>
                   </div>
-
-                  {/* Mensagem de Boas-vindas */}
-                  <div>
-                    <Label className="text-gray-400 text-xs">Mensagem de Boas-vindas *</Label>
-                    <Textarea
-                      value={newCharacter.greeting}
-                      onChange={(e) => setNewCharacter({ ...newCharacter, greeting: e.target.value })}
-                      className="bg-[#1a1a1a] border-[#2a2a2a] text-white mt-1 min-h-[60px]"
-                      placeholder="Primeira mensagem do personagem..."
-                    />
-                  </div>
-
-                  <Button
-                    onClick={createCharacter}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                    disabled={!newCharacter.name || !newCharacter.personality || !newCharacter.greeting}
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Criar Personagem
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {/* Categorias */}
@@ -488,8 +558,8 @@ export default function Home() {
             <div className="text-xs text-gray-500">Mensagens</div>
           </div>
           <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4 text-center">
-            <div className="text-2xl font-bold text-blue-400">100%</div>
-            <div className="text-xs text-gray-500">Gratuito</div>
+            <div className="text-2xl font-bold text-blue-400">2</div>
+            <div className="text-xs text-gray-500">Modelos AI</div>
           </div>
         </div>
 
@@ -498,9 +568,9 @@ export default function Home() {
           {filteredCharacters.map((character) => (
             <Card
               key={character.id}
-              className="bg-[#141414] border-[#1f1f1f] hover:border-purple-600/50 transition-all duration-300 group cursor-pointer overflow-hidden"
+              className="bg-[#141414] border-[#1f1f1f] hover:border-purple-600/50 transition-all duration-300 group overflow-hidden"
             >
-              {/* Banner com Avatar */}
+              {/* Banner */}
               <div className="h-24 bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-blue-600/20 relative">
                 <div className="absolute -bottom-6 left-4">
                   <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-2xl shadow-lg border-2 border-[#0a0a0a]">
@@ -537,24 +607,14 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Botões */}
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => setSelectedCharacter(character)}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm"
-                  >
-                    <MessageCircle className="w-4 h-4 mr-1" />
-                    Conversar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setViewingCharacter(character)}
-                    className="border-[#2a2a2a] text-gray-400 hover:text-white hover:bg-[#1a1a1a]"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Button>
-                </div>
+                {/* Botão Ver - Abre modal com descrição */}
+                <Button
+                  onClick={() => setViewingCharacter(character)}
+                  className="w-full bg-[#1a1a1a] hover:bg-[#252525] text-white border border-[#2a2a2a]"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Ver Detalhes
+                </Button>
               </CardContent>
             </Card>
           ))}
@@ -568,7 +628,7 @@ export default function Home() {
         )}
       </main>
 
-      {/* Modal de Visualização */}
+      {/* Modal de Visualização com botão Conversar */}
       <Dialog open={!!viewingCharacter} onOpenChange={() => setViewingCharacter(null)}>
         <DialogContent className="bg-[#141414] border-[#2a2a2a] text-white max-w-lg">
           {viewingCharacter && (
@@ -604,6 +664,14 @@ export default function Home() {
                   <div className="bg-[#1a1a1a] rounded-lg p-3 text-gray-300 text-sm border border-[#2a2a2a]">
                     {viewingCharacter.greeting}
                   </div>
+                </div>
+
+                {/* Modelo selecionado */}
+                <div className="flex items-center gap-2 py-2">
+                  <span className="text-xs text-gray-500">Modelo:</span>
+                  <Badge className={`${AI_MODELS[selectedModel].bgColor} ${AI_MODELS[selectedModel].color}`}>
+                    {AI_MODELS[selectedModel].icon} {AI_MODELS[selectedModel].name}
+                  </Badge>
                 </div>
 
                 <div className="flex gap-2 pt-2">
