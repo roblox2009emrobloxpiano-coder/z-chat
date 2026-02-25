@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 
-// Personagens padrão para criar se o banco estiver vazio
+// Personagens padrão (armazenados em memória)
 const defaultCharacters = [
   {
     id: 'char_1',
@@ -77,23 +76,12 @@ const defaultCharacters = [
   }
 ];
 
+// Armazenamento em memória para personagens criados
+let customCharacters: typeof defaultCharacters = [];
+
 export async function GET() {
   try {
-    let characters = await prisma.character.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
-
-    // Se não houver personagens, criar os padrão
-    if (characters.length === 0) {
-      await prisma.character.createMany({
-        data: defaultCharacters
-      });
-      characters = await prisma.character.findMany({
-        orderBy: { createdAt: 'desc' }
-      });
-    }
-
-    return NextResponse.json(characters);
+    return NextResponse.json([...defaultCharacters, ...customCharacters]);
   } catch (error) {
     console.error('Error fetching characters:', error);
     return NextResponse.json({ error: 'Failed to fetch characters' }, { status: 500 });
@@ -105,18 +93,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, description, avatar, personality, greeting, category } = body;
 
-    const character = await prisma.character.create({
-      data: {
-        name,
-        description,
-        avatar: avatar || '👤',
-        personality,
-        greeting,
-        category: category || 'Outros'
-      }
-    });
+    const newCharacter = {
+      id: 'char_' + Date.now(),
+      name,
+      description: description || '',
+      avatar: avatar || '👤',
+      personality: personality || '',
+      greeting: greeting || 'Olá! Como posso ajudar?',
+      category: category || 'Outros'
+    };
 
-    return NextResponse.json(character);
+    customCharacters.push(newCharacter);
+
+    return NextResponse.json(newCharacter);
   } catch (error) {
     console.error('Error creating character:', error);
     return NextResponse.json({ error: 'Failed to create character' }, { status: 500 });

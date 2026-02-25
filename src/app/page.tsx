@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, MessageCircle, Plus, Send, Sparkles, Trash2, User } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Plus, Send, Sparkles, Trash2 } from 'lucide-react'
 
 interface Character {
   id: string
@@ -57,6 +57,38 @@ export default function Home() {
     }
   }, [messages])
 
+  // Carregar histórico do localStorage quando selecionar personagem
+  useEffect(() => {
+    if (selectedCharacter) {
+      const saved = localStorage.getItem(`chat_${selectedCharacter.id}`)
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          if (parsed.length > 0) {
+            setMessages(parsed)
+            return
+          }
+        } catch {
+          // ignore
+        }
+      }
+      // Mensagem de boas-vindas
+      setMessages([{
+        id: 'greeting',
+        content: selectedCharacter.greeting,
+        role: 'assistant',
+        createdAt: new Date().toISOString()
+      }])
+    }
+  }, [selectedCharacter])
+
+  // Salvar mensagens no localStorage
+  useEffect(() => {
+    if (selectedCharacter && messages.length > 0) {
+      localStorage.setItem(`chat_${selectedCharacter.id}`, JSON.stringify(messages))
+    }
+  }, [messages, selectedCharacter])
+
   const fetchCharacters = async () => {
     try {
       const response = await fetch('/api/characters')
@@ -67,34 +99,9 @@ export default function Home() {
     }
   }
 
-  const selectCharacter = async (character: Character) => {
+  const selectCharacter = (character: Character) => {
     setSelectedCharacter(character)
-    setMessages([])
-
-    // Carregar histórico
-    try {
-      const response = await fetch(`/api/chat?characterId=${character.id}`)
-      const data = await response.json()
-      if (data.length > 0) {
-        setMessages(data)
-      } else {
-        // Mensagem de boas-vindas
-        setMessages([{
-          id: 'greeting',
-          content: character.greeting,
-          role: 'assistant',
-          createdAt: new Date().toISOString()
-        }])
-      }
-    } catch (error) {
-      // Mensagem de boas-vindas em caso de erro
-      setMessages([{
-        id: 'greeting',
-        content: character.greeting,
-        role: 'assistant',
-        createdAt: new Date().toISOString()
-      }])
-    }
+    setInputMessage('')
   }
 
   const sendMessage = async () => {
@@ -120,7 +127,7 @@ export default function Home() {
         body: JSON.stringify({
           characterId: selectedCharacter.id,
           message: userMessage,
-          history: messages.filter(m => m.id !== 'greeting' && m.id !== 'temp-' + Date.now())
+          history: messages.filter(m => m.id !== 'greeting')
         })
       })
 
@@ -177,6 +184,9 @@ export default function Home() {
   }
 
   const clearHistory = () => {
+    if (selectedCharacter) {
+      localStorage.removeItem(`chat_${selectedCharacter.id}`)
+    }
     setMessages([{
       id: 'greeting',
       content: selectedCharacter?.greeting || '',
@@ -391,7 +401,7 @@ export default function Home() {
           <p className="text-white/70">
             Escolha um personagem e comece a conversar. Mensagens ilimitadas, sem restrições, 100% gratuito!
           </p>
-          <div className="flex gap-4 mt-4">
+          <div className="flex flex-wrap gap-4 mt-4">
             <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
               ✓ Mensagens Ilimitadas
             </Badge>
@@ -405,75 +415,52 @@ export default function Home() {
         </div>
 
         {/* Lista por Categorias */}
-        {categories.map((category) => (
-          <div key={category} className="mb-8">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-400" />
-              {category}
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {characters
-                .filter((c) => c.category === category)
-                .map((character) => (
-                  <Card
-                    key={character.id}
-                    className="bg-white/5 border-white/10 hover:bg-white/10 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/20"
-                    onClick={() => selectCharacter(character)}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">
-                          {character.avatar}
+        {categories.length > 0 ? (
+          categories.map((category) => (
+            <div key={category} className="mb-8">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-400" />
+                {category}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {characters
+                  .filter((c) => c.category === category)
+                  .map((character) => (
+                    <Card
+                      key={character.id}
+                      className="bg-white/5 border-white/10 hover:bg-white/10 cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-purple-500/20"
+                      onClick={() => selectCharacter(character)}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">
+                            {character.avatar}
+                          </div>
+                          <div>
+                            <CardTitle className="text-white">{character.name}</CardTitle>
+                            <Badge variant="outline" className="border-white/20 text-white/60 mt-1">
+                              {character.category}
+                            </Badge>
+                          </div>
                         </div>
-                        <div>
-                          <CardTitle className="text-white">{character.name}</CardTitle>
-                          <Badge variant="outline" className="border-white/20 text-white/60 mt-1">
-                            {character.category}
-                          </Badge>
+                      </CardHeader>
+                      <CardContent>
+                        <CardDescription className="text-white/60 line-clamp-2">
+                          {character.description}
+                        </CardDescription>
+                        <div className="mt-3 flex items-center gap-2 text-purple-400 text-sm">
+                          <MessageCircle className="w-4 h-4" />
+                          <span>Clicar para conversar</span>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <CardDescription className="text-white/60 line-clamp-2">
-                        {character.description}
-                      </CardDescription>
-                      <div className="mt-3 flex items-center gap-2 text-purple-400 text-sm">
-                        <MessageCircle className="w-4 h-4" />
-                        <span>Clicar para conversar</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
             </div>
-          </div>
-        ))}
-
-        {/* Todos os Personagens se não houver categorias */}
-        {categories.length === 0 && characters.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {characters.map((character) => (
-              <Card
-                key={character.id}
-                className="bg-white/5 border-white/10 hover:bg-white/10 cursor-pointer transition-all duration-300 hover:scale-105"
-                onClick={() => selectCharacter(character)}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-3xl">
-                      {character.avatar}
-                    </div>
-                    <div>
-                      <CardTitle className="text-white">{character.name}</CardTitle>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription className="text-white/60">
-                    {character.description}
-                  </CardDescription>
-                </CardContent>
-              </Card>
-            ))}
+          ))
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-white/60">Carregando personagens...</p>
           </div>
         )}
       </div>
